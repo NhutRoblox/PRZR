@@ -4,7 +4,7 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 -- ==================== WINDOW ====================
 local Window = Rayfield:CreateWindow({
     Name = "NhutCrack",
-    LoadingTitle = "NHÌN CÁI LỒN",
+    LoadingTitle = "ĐỤ MỆ CHỜ XÍU ĐI",
     LoadingSubtitle = "by NhutDZ",
     ConfigurationSaving = {Enabled = true, FolderName = "NhutCrack", FileName = "Settings"}
 })
@@ -157,6 +157,12 @@ local function LoadAimbot()
             end
             return false
         end
+        
+        local function isPlayerAlive(plr)
+            local char = plr.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            return hum and hum.Health > 0
+        end
 
         local function getClosestPlayerToCenter()
             local closestPlayer = nil
@@ -190,11 +196,13 @@ local function LoadAimbot()
         end
 
         RunService.RenderStepped:Connect(function()
+            if not AimbotEnabled or not isPlayerAlive(LocalPlayer) then 
+                return 
+            end
+            
             if FOVFrame then
                 FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
             end
-
-            if not AimbotEnabled then return end
 
             local targetCharacter = getClosestPlayerToCenter()
             
@@ -602,6 +610,65 @@ local function CreateInvisibleGUI()
     StatusButton.MouseButton1Click:Connect(ToggleInvisible)
 end
 
+-- ==================== YIELD SCRIPT ====================
+local YieldEnabled = false
+local YieldConnection = nil
+
+local function LoadYield()
+    if YieldEnabled then
+        Rayfield:Notify({
+            Title = "Yield",
+            Content = "⚠️ Yield đã được kích hoạt!",
+            Duration = 2,
+        })
+        return
+    end
+
+    Rayfield:Notify({
+        Title = "Yield",
+        Content = "⏳ Đang tải Infinite Yield...",
+        Duration = 2,
+    })
+
+    local success, err = pcall(function()
+        loadstring(game:HttpGet(('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'), true))()
+    end)
+
+    if success then
+        YieldEnabled = true
+        Rayfield:Notify({
+            Title = "Yield",
+            Content = "✅ Đã kích hoạt Infinite Yield!",
+            Duration = 3,
+        })
+    else
+        Rayfield:Notify({
+            Title = "Yield",
+            Content = "❌ Lỗi tải Yield: " .. tostring(err),
+            Duration = 4,
+        })
+        warn("Lỗi khi tải Infinite Yield:", err)
+    end
+end
+
+local function UnloadYield()
+    if not YieldEnabled then
+        Rayfield:Notify({
+            Title = "Yield",
+            Content = "⚠️ Yield chưa được kích hoạt!",
+            Duration = 2,
+        })
+        return
+    end
+
+    YieldEnabled = false
+    Rayfield:Notify({
+        Title = "Yield",
+        Content = "❌ Đã tắt Yield (vui lòng F9 hoặc reset game để xóa hoàn toàn)",
+        Duration = 3,
+    })
+end
+
 -- ==================== UI ====================
 -- TAB MAIN
 MainTab:CreateToggle({
@@ -690,11 +757,18 @@ VisualTab:CreateToggle({
     CurrentValue = false, 
     Callback = function(v)
         Settings.ESP.Enabled = v
-        for _, plr in ipairs(Players:GetPlayers()) do
-            if not v and plr.Character and plr.Character:FindFirstChild(FOLDER_NAME) then 
-                plr.Character[FOLDER_NAME]:Destroy() 
-            else 
-                CreateESP(plr) 
+        if not v then
+            -- Xóa tất cả ESP
+            for _, plr in ipairs(Players:GetPlayers()) do
+                if plr.Character then
+                    local folder = plr.Character:FindFirstChild(FOLDER_NAME)
+                    if folder then folder:Destroy() end
+                end
+            end
+        else
+            -- Refresh ESP
+            for _, plr in ipairs(Players:GetPlayers()) do
+                CreateESP(plr)
             end
         end
     end
@@ -821,6 +895,31 @@ TrollTab:CreateButton({
     end
 })
 
+-- ==================== YIELD BUTTONS ====================
+TrollTab:CreateParagraph({
+    Title = "⚡ Infinite Yield",
+    Content = "Script admin mạnh mẽ với hàng trăm lệnh"
+})
+
+TrollTab:CreateButton({
+    Name = "⚡ Bật Yield (Admin Script)", 
+    Callback = function()
+        LoadYield()
+    end
+})
+
+TrollTab:CreateButton({
+    Name = "⛔ Tắt Yield (Reset trạng thái)", 
+    Callback = function()
+        UnloadYield()
+    end
+})
+
+TrollTab:CreateParagraph({
+    Title = "📖 Hướng Dẫn Sử Dụng Yield",
+    Content = "1. Bấm 'Bật Yield' để kích hoạt\n2. Mở chat game gõ ';' + lệnh\n3. Ví dụ: ;fly, ;tp, ;kill all\n4. Gõ ';cmds' để xem tất cả lệnh"
+})
+
 -- ==================== INVISIBLE HEARTBEAT LOOP ====================
 local INVIS_POS = CFrame.new(99999, 99999, 99999)
 
@@ -870,3 +969,4 @@ print("Bật Fly trong tab Main để bay!")
 print("WASD: Di chuyển | Space: Lên | Shift: Xuống")
 print("🎯 Tab Aimbot: Bật/tắt aimbot mobile!")
 print("👻 Tab Troll: Bấm 'Hiển thị nút Tàng Hình' để xuất hiện nút!")
+print("⚡ Tab Troll: Bấm 'Bật Yield' để kích hoạt Infinite Yield!")
