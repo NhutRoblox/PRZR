@@ -4,7 +4,7 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 -- ==================== WINDOW ====================
 local Window = Rayfield:CreateWindow({
     Name = "NhutCrack",
-    LoadingTitle = "ĐỤ MỆ CHỜ XÍU ĐI",
+    LoadingTitle = "NHÌN CÁI LỒN",
     LoadingSubtitle = "by NhutDZ",
     ConfigurationSaving = {Enabled = true, FolderName = "NhutCrack", FileName = "Settings"}
 })
@@ -17,12 +17,10 @@ local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
 
 -- ==================== SETTINGS ====================
 local Settings = {
-    ESP = {Enabled = false, Tracers = true, Distance = true, TeamCheck = false},
-    Hitbox = {Enabled = false, Size = 12, TeamCheck = false, OriginalSizes = {}},
+    ESP = {Enabled = false, Distance = true, TeamCheck = false},
     Speed = {Enabled = false, Value = 16},
     Fly = {Enabled = false, Speed = 80},
-    Jump = {Enabled = false, Value = 50},
-    Invisible = {Enabled = false}
+    Jump = {Enabled = false, Value = 50}
 }
 
 local FOLDER_NAME = "NhutESP"
@@ -31,7 +29,14 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
--- ==================== AIMBOT MOBILE CODE (MỚI) ====================
+-- ==================== INVISIBLE VARIABLES ====================
+local IsInvisible = false
+local StatusButton = nil
+local invisibleGui = nil
+local invisConnections = {}
+local invisRunning = false
+
+-- ==================== AIMBOT MOBILE CODE ====================
 local aimbotLoaded = false
 local aimbotGui = nil
 local aimbotToggleState = false
@@ -47,38 +52,28 @@ local function LoadAimbot()
     end
     
     pcall(function()
-        -- ====================================================================
-        -- ĐẢM BẢO GAME TẢI XONG HOÀN TOÀN
-        -- ====================================================================
         repeat task.wait() until game:IsLoaded()
         repeat task.wait() until game.Players.LocalPlayer
 
-        -- SERVICES
         local Players = game:GetService("Players")
         local RunService = game:GetService("RunService")
         local Workspace = game:GetService("Workspace")
         local UserInputService = game:GetService("UserInputService")
 
-        -- VARIABLES
         local LocalPlayer = Players.LocalPlayer
         local Camera = Workspace.CurrentCamera
 
-        -- CONFIGURATION
         local AimbotEnabled = true
-        local FOV_RADIUS = 50 -- Kích thước vòng POV
+        local FOV_RADIUS = 50
         local AIM_PART = "Head"
-        local AIM_STRENGTH = 1 -- Khóa mục tiêu cực mạnh, không độ trễ
+        local AIM_STRENGTH = 1
 
-        -- ====================================================================
-        -- TẠO GUI CHỐNG LỆCH TÂM & NÚT BẤM DI ĐỘNG
-        -- ====================================================================
         local ScreenGui = Instance.new("ScreenGui")
         ScreenGui.Name = "AimbotMobileSystem_TeamFix"
         ScreenGui.ResetOnSpawn = false
         ScreenGui.DisplayOrder = 9999999
-        ScreenGui.IgnoreGuiInset = true -- Sửa lỗi lệch tâm do thanh TopBar của Roblox
+        ScreenGui.IgnoreGuiInset = true
 
-        -- 1. Vòng tròn FOV tâm màn hình (Kích thước 50)
         local FOVFrame = Instance.new("Frame")
         FOVFrame.Name = "FOV_Circle"
         FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -97,7 +92,6 @@ local function LoadAimbot()
         UIStrokeFOV.Thickness = 1.5
         UIStrokeFOV.Parent = FOVFrame
 
-        -- 2. Chấm nhỏ nằm ngay tâm giữa của vòng tròn (Hồng tâm)
         local CenterDot = Instance.new("Frame")
         CenterDot.Name = "CenterDot"
         CenterDot.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -110,26 +104,24 @@ local function LoadAimbot()
         UICornerDot.CornerRadius = UDim.new(1, 0)
         UICornerDot.Parent = CenterDot
 
-        -- 3. Nút bấm tròn BẬT/TẮT dành cho Điện thoại (Có thể kéo thả)
         local MobileToggleButton = Instance.new("TextButton")
         MobileToggleButton.Name = "MobileAimToggle"
         MobileToggleButton.Size = UDim2.new(0, 50, 0, 50)
         MobileToggleButton.Position = UDim2.new(0, 30, 0, 150)
-        MobileToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 100) -- Màu xanh lá cây (Đang bật)
+        MobileToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 100)
         MobileToggleButton.BackgroundTransparency = 0.3
         MobileToggleButton.Text = "AIM"
         MobileToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
         MobileToggleButton.Font = Enum.Font.SourceSansBold
         MobileToggleButton.TextSize = 14
         MobileToggleButton.Active = true
-        MobileToggleButton.Draggable = true -- Nhấp giữ để kéo nút đi bất cứ đâu
+        MobileToggleButton.Draggable = true
         MobileToggleButton.Parent = ScreenGui
 
         local UICornerBtn = Instance.new("UICorner")
         UICornerBtn.CornerRadius = UDim.new(1, 0)
         UICornerBtn.Parent = MobileToggleButton
 
-        -- ĐƯA GUI VÀO PLAYER GUI
         local PlayerGui = LocalPlayer:WaitForChild("PlayerGui", 5)
         if PlayerGui then
             ScreenGui.Parent = PlayerGui
@@ -137,9 +129,6 @@ local function LoadAimbot()
 
         aimbotGui = ScreenGui
 
-        -- ====================================================================
-        -- LOGIC SỰ KIỆN CLICK NÚT TRÊN ĐIỆN THOẠI
-        -- ====================================================================
         MobileToggleButton.MouseButton1Click:Connect(function()
             AimbotEnabled = not AimbotEnabled
             FOVFrame.Visible = AimbotEnabled
@@ -153,11 +142,6 @@ local function LoadAimbot()
             end
         end)
 
-        -- ====================================================================
-        -- LOGIC HỆ THỐNG KIỂM TRA (WALL CHECK & TEAM CHECK)
-        -- ====================================================================
-
-        -- Hàm kiểm tra nhìn thấy (Wall Check)
         local function isVisible(targetPart)
             local origin = Camera.CFrame.Position
             local direction = targetPart.Position - origin
@@ -174,14 +158,12 @@ local function LoadAimbot()
             return false
         end
 
-        -- Hàm tìm mục tiêu gần tâm nhất (Có kiểm tra Team)
         local function getClosestPlayerToCenter()
             local closestPlayer = nil
             local shortestDistance = FOV_RADIUS
             local screenCenter = Camera.ViewportSize / 2 
 
             for _, player in ipairs(Players:GetPlayers()) do
-                -- [QUAN TRỌNG] Bỏ qua bản thân VÀ bỏ qua những người cùng Team với bạn
                 if player ~= LocalPlayer and player.Team ~= LocalPlayer.Team and player.Character then
                     local character = player.Character
                     local head = character:FindFirstChild(AIM_PART)
@@ -195,7 +177,6 @@ local function LoadAimbot()
                             local distance = (targetPos - screenCenter).Magnitude
 
                             if distance < shortestDistance then
-                                -- Kiểm tra tường ngầm trước khi khóa
                                 if isVisible(head) then
                                     shortestDistance = distance
                                     closestPlayer = character
@@ -208,7 +189,6 @@ local function LoadAimbot()
             return closestPlayer
         end
 
-        -- VÒNG LẶP RENDER KHÓA CHẾT TÂM CAMERA VÀO ĐẦU KẺ ĐỊCH
         RunService.RenderStepped:Connect(function()
             if FOVFrame then
                 FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
@@ -287,8 +267,6 @@ local function StartFly()
         return 
     end
     
-    print("🚀 BẬT FLY - Đang bay...")
-    
     flying = true
     
     bv = Instance.new("BodyVelocity")
@@ -350,7 +328,6 @@ end
 
 local function StopFly()
     if not flying then return end
-    print("🛑 TẮT FLY")
     
     flying = false
     
@@ -409,7 +386,7 @@ local function GetRoot(character)
 end
 
 local function IsTeammate(plr)
-    if not Settings.ESP.TeamCheck and not Settings.Hitbox.TeamCheck then return false end
+    if not Settings.ESP.TeamCheck then return false end
     if not plr or not LocalPlayer then return false end
     return LocalPlayer.Team == plr.Team and LocalPlayer.Team ~= nil
 end
@@ -442,38 +419,6 @@ local function CleanupPlayer(plr)
     if plr.Character and plr.Character:FindFirstChild(FOLDER_NAME) then
         plr.Character[FOLDER_NAME]:Destroy()
     end
-    Settings.Hitbox.OriginalSizes[plr] = nil
-end
-
--- ==================== HITBOX ====================
-local function ApplyHitbox(character, plr)
-    if not character or not plr or plr == LocalPlayer then return end
-    local root = GetRoot(character)
-    if not root then return end
-    
-    if not Settings.Hitbox.OriginalSizes[plr] then
-        Settings.Hitbox.OriginalSizes[plr] = root.Size
-    end
-    
-    if Settings.Hitbox.Enabled and not (Settings.Hitbox.TeamCheck and IsTeammate(plr)) then
-        root.Size = Vector3.new(Settings.Hitbox.Size, Settings.Hitbox.Size, Settings.Hitbox.Size)
-        root.Transparency = 0.6
-        root.CanCollide = false
-        root.Color = Color3.fromRGB(255, 0, 0)
-    else
-        if Settings.Hitbox.OriginalSizes[plr] then
-            root.Size = Settings.Hitbox.OriginalSizes[plr]
-        end
-        root.Transparency = 1
-        root.CanCollide = true
-        root.Color = Color3.fromRGB(27, 42, 53)
-    end
-end
-
-local function UpdateAllHitboxes()
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr.Character then ApplyHitbox(plr.Character, plr) end
-    end
 end
 
 -- ==================== ESP ====================
@@ -498,15 +443,6 @@ local function CreateESP(plr)
         highlight.FillTransparency = 0.5
         highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
         
-        if Settings.ESP.Tracers then
-            local line = Instance.new("LineHandleAdornment", folder)
-            line.Name = "TracerLine"
-            line.Thickness = 3
-            line.Color3 = Color3.fromRGB(255, 0, 0)
-            line.AlwaysOnTop = true
-            line.Adornee = workspace
-        end
-        
         if Settings.ESP.Distance then
             local billboard = Instance.new("BillboardGui", folder)
             billboard.Adornee = root
@@ -530,10 +466,10 @@ local function CreateESP(plr)
     plr.CharacterAdded:Connect(function(char)
         task.wait(0.5)
         Apply(char)
-        UpdateAllHitboxes()
     end)
 end
 
+-- Cập nhật khoảng cách
 RunService.RenderStepped:Connect(function()
     local myRoot = GetLocalRoot()
     if not myRoot then return end
@@ -543,40 +479,128 @@ RunService.RenderStepped:Connect(function()
             local folder = plr.Character:FindFirstChild(FOLDER_NAME)
             local root = GetRoot(plr.Character)
             
-            if folder and root then
-                if Settings.ESP.Enabled and Settings.ESP.Distance then
-                    local label = folder:FindFirstChild("DistanceLabel", true)
-                    if label then
-                        label.Text = string.format("[%d]", math.floor((root.Position - myRoot.Position).Magnitude))
-                    end
-                end
-                
-                local line = folder:FindFirstChild("TracerLine")
-                if line and line:IsA("LineHandleAdornment") then
-                    if Settings.ESP.Enabled and Settings.ESP.Tracers then
-                        local startPos = myRoot.Position - Vector3.new(0, 2, 0)
-                        line.CFrame = CFrame.new(startPos, root.Position)
-                        line.Length = (root.Position - startPos).Magnitude
-                    else
-                        line.Length = 0
-                    end
+            if folder and root and Settings.ESP.Enabled and Settings.ESP.Distance then
+                local label = folder:FindFirstChild("DistanceLabel", true)
+                if label then
+                    label.Text = string.format("[%d]", math.floor((root.Position - myRoot.Position).Magnitude))
                 end
             end
         end
     end
 end)
 
-task.spawn(function()
-    while task.wait(0.3) do
-        if Settings.Hitbox.Enabled then UpdateAllHitboxes() end
-    end
-end)
-
 Players.PlayerAdded:Connect(function(plr)
     CreateESP(plr)
-    plr.CharacterAdded:Connect(function() task.wait(0.5) UpdateAllHitboxes() end)
 end)
 Players.PlayerRemoving:Connect(CleanupPlayer)
+
+-- ==================== INVISIBLE FUNCTIONS ====================
+local function ApplyTransparency(char, transparencyValue)
+    if not char then return end
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA('BasePart') and part.Name ~= "HumanoidRootPart" then
+            part.Transparency = transparencyValue
+        end
+    end
+end
+
+local function ToggleInvisible()
+    IsInvisible = not IsInvisible
+    
+    local char = LocalPlayer.Character
+    if IsInvisible then
+        ApplyTransparency(char, 0.5)
+        LocalPlayer.ReplicationFocus = Camera
+    else
+        ApplyTransparency(char, 0)
+        LocalPlayer.ReplicationFocus = nil
+    end
+    
+    if StatusButton then
+        if IsInvisible then
+            StatusButton.Text = "Invisible: ON"
+            StatusButton.BackgroundColor3 = Color3.fromRGB(85, 255, 127)
+            StatusButton.TextColor3 = Color3.fromRGB(0, 0, 0)
+        else
+            StatusButton.Text = "Invisible: OFF"
+            StatusButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+            StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end
+end
+
+local function CreateInvisibleGUI()
+    if LocalPlayer.PlayerGui:FindFirstChild("InvisibleGUI") then
+        LocalPlayer.PlayerGui.InvisibleGUI:Destroy()
+        invisibleGui = nil
+        StatusButton = nil
+        return
+    end
+    
+    local ScreenGui = Instance.new('ScreenGui')
+    ScreenGui.Name = "InvisibleGUI"
+    ScreenGui.ResetOnSpawn = false
+    
+    StatusButton = Instance.new('TextButton')
+    local UICorner = Instance.new("UICorner")
+    local UIStroke = Instance.new("UIStroke")
+    
+    StatusButton.Name = "ToggleButton"
+    StatusButton.Size = UDim2.new(0, 140, 0, 50)
+    StatusButton.Position = UDim2.new(0.5, -70, 0.15, 0)
+    StatusButton.Text = IsInvisible and 'Invisible: ON' or 'Invisible: OFF'
+    StatusButton.Font = Enum.Font.GothamBold
+    StatusButton.TextSize = 16
+    StatusButton.TextColor3 = IsInvisible and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255)
+    StatusButton.BackgroundColor3 = IsInvisible and Color3.fromRGB(85, 255, 127) or Color3.fromRGB(255, 85, 85)
+    StatusButton.Parent = ScreenGui
+    
+    UICorner.CornerRadius = UDim.new(0, 10)
+    UICorner.Parent = StatusButton
+    
+    UIStroke.Thickness = 2
+    UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    UIStroke.Color = Color3.fromRGB(255, 255, 255)
+    UIStroke.Transparency = 0.5
+    UIStroke.Parent = StatusButton
+    
+    ScreenGui.Parent = LocalPlayer:WaitForChild('PlayerGui')
+    invisibleGui = ScreenGui
+    
+    local dragging = false
+    local dragInput, dragStart, startPos
+    
+    StatusButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = StatusButton.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    StatusButton.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            StatusButton.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    StatusButton.MouseButton1Click:Connect(ToggleInvisible)
+end
 
 -- ==================== UI ====================
 -- TAB MAIN
@@ -680,7 +704,16 @@ VisualTab:CreateToggle({
     Name = "Team Check (ESP)", 
     CurrentValue = false, 
     Callback = function(v) 
-        Settings.ESP.TeamCheck = v 
+        Settings.ESP.TeamCheck = v
+        -- Refresh ESP
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if plr.Character and plr.Character:FindFirstChild(FOLDER_NAME) then 
+                plr.Character[FOLDER_NAME]:Destroy() 
+            end
+            if Settings.ESP.Enabled then
+                CreateESP(plr)
+            end
+        end
     end
 })
 
@@ -689,45 +722,6 @@ VisualTab:CreateToggle({
     CurrentValue = true, 
     Callback = function(v) 
         Settings.ESP.Distance = v 
-    end
-})
-
-VisualTab:CreateToggle({
-    Name = "Tracers", 
-    CurrentValue = true, 
-    Callback = function(v) 
-        Settings.ESP.Tracers = v 
-    end
-})
-
-VisualTab:CreateToggle({
-    Name = "Hitbox Expander", 
-    CurrentValue = false, 
-    Callback = function(v) 
-        Settings.Hitbox.Enabled = v 
-        UpdateAllHitboxes() 
-    end
-})
-
-VisualTab:CreateSlider({
-    Name = "Hitbox Size", 
-    Range = {5, 100}, 
-    Increment = 1, 
-    CurrentValue = 12, 
-    Callback = function(v) 
-        Settings.Hitbox.Size = v 
-        if Settings.Hitbox.Enabled then 
-            UpdateAllHitboxes() 
-        end 
-    end
-})
-
-VisualTab:CreateToggle({
-    Name = "Hitbox Team Check", 
-    CurrentValue = false, 
-    Callback = function(v) 
-        Settings.Hitbox.TeamCheck = v 
-        UpdateAllHitboxes() 
     end
 })
 
@@ -758,53 +752,27 @@ AimbotTab:CreateParagraph({
 })
 
 -- ==================== TROLL TAB ====================
-local invisibleActive = false
-
 TrollTab:CreateParagraph({
     Title = "👻 Tàng Hình",
-    Content = "Bật/tắt chế độ tàng hình"
+    Content = "Bật/tắt chế độ tàng hình (Nhấn G để tắt/bật nhanh)"
 })
 
 TrollTab:CreateButton({
-    Name = "👻 Bật Tàng Hình", 
+    Name = "👻 Hiển thị nút Tàng Hình", 
     Callback = function()
-        if not invisibleActive then
-            pcall(function()
-                loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Awesome-Invisible-man-21074"))()
-                invisibleActive = true
-                print("👻 Đã kích hoạt Tàng Hình!")
-                
-                Rayfield:Notify({
-                    Title = "Troll Mode",
-                    Content = "✅ Đã bật tàng hình thành công!",
-                    Duration = 2,
-                })
-            end)
+        CreateInvisibleGUI()
+        if invisibleGui then
+            Rayfield:Notify({
+                Title = "Troll Mode",
+                Content = "✅ Đã hiển thị nút tàng hình! (Nhấn G để tắt/bật)",
+                Duration = 2,
+            })
         else
-            pcall(function()
-                local char = LocalPlayer.Character
-                if char then
-                    for _, part in ipairs(char:GetDescendants()) do
-                        if part:IsA("BasePart") then
-                            part.Transparency = 0
-                            part.LocalTransparencyModifier = 0
-                        end
-                    end
-                    local hum = char:FindFirstChildOfClass("Humanoid")
-                    if hum then
-                        hum.HealthDisplayDistance = 100
-                        hum.NameDisplayDistance = 100
-                    end
-                end
-                invisibleActive = false
-                print("👀 Đã tắt Tàng Hình!")
-                
-                Rayfield:Notify({
-                    Title = "Troll Mode",
-                    Content = "❌ Đã tắt tàng hình!",
-                    Duration = 2,
-                })
-            end)
+            Rayfield:Notify({
+                Title = "Troll Mode",
+                Content = "❌ Đã ẩn nút tàng hình!",
+                Duration = 2,
+            })
         end
     end
 })
@@ -815,7 +783,7 @@ TrollTab:CreateButton({
         pcall(function()
             local char = LocalPlayer.Character
             if char then
-                for _, part in ipairs(char:GetDescendants()) do
+                for _, part in pairs(char:GetDescendants()) do
                     if part:IsA("BasePart") then
                         part.Transparency = 0
                         part.LocalTransparencyModifier = 0
@@ -827,20 +795,78 @@ TrollTab:CreateButton({
                     hum.NameDisplayDistance = 100
                 end
             end
-            invisibleActive = false
-            print("🔄 Đã reset tàng hình!")
+            IsInvisible = false
+            LocalPlayer.ReplicationFocus = nil
+            
+            if LocalPlayer.PlayerGui:FindFirstChild("InvisibleGUI") then
+                LocalPlayer.PlayerGui.InvisibleGUI:Destroy()
+                invisibleGui = nil
+                StatusButton = nil
+            end
+            
+            if invisConnections then
+                for _, conn in pairs(invisConnections) do
+                    pcall(function() conn:Disconnect() end)
+                end
+                invisConnections = {}
+            end
+            invisRunning = false
             
             Rayfield:Notify({
                 Title = "Troll Mode",
-                Content = "🔄 Đã reset!",
+                Content = "🔄 Đã reset tàng hình!",
                 Duration = 2,
             })
         end)
     end
 })
 
+-- ==================== INVISIBLE HEARTBEAT LOOP ====================
+local INVIS_POS = CFrame.new(99999, 99999, 99999)
+
+invisConnections[1] = LocalPlayer:GetMouse().KeyDown:Connect(function(key)
+    if key == 'g' then
+        ToggleInvisible()
+    end
+end)
+
+invisConnections[2] = RunService.Heartbeat:Connect(function()
+    if IsInvisible then
+        local char = LocalPlayer.Character
+        local rootPart = char and char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        
+        if rootPart and humanoid and humanoid.Health > 0 then
+            local currentCFrame = rootPart.CFrame
+            local originalCamOffset = humanoid.CameraOffset
+            
+            local offsetPosition = INVIS_POS:ToObjectSpace(currentCFrame).Position
+            
+            rootPart.CFrame = INVIS_POS
+            humanoid.CameraOffset = offsetPosition
+            
+            RunService.RenderStepped:Wait()
+            
+            if rootPart and rootPart.Parent then
+                rootPart.CFrame = currentCFrame
+                humanoid.CameraOffset = originalCamOffset
+            end
+        end
+    end
+end)
+
+invisConnections[3] = LocalPlayer.CharacterAdded:Connect(function(newChar)
+    IsInvisible = false
+    LocalPlayer.ReplicationFocus = nil
+    if StatusButton then
+        StatusButton.Text = "Invisible: OFF"
+        StatusButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
+        StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    end
+end)
+
 print("=== LOADED SUCCESSFULLY ===")
 print("Bật Fly trong tab Main để bay!")
 print("WASD: Di chuyển | Space: Lên | Shift: Xuống")
 print("🎯 Tab Aimbot: Bật/tắt aimbot mobile!")
-print("👻 Tab Troll: Bật/tắt tàng hình!")
+print("👻 Tab Troll: Bấm 'Hiển thị nút Tàng Hình' để xuất hiện nút!")
