@@ -1,0 +1,846 @@
+-- ==================== LOAD RAYFIELD UI ====================
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+
+-- ==================== WINDOW ====================
+local Window = Rayfield:CreateWindow({
+    Name = "NhutCrack",
+    LoadingTitle = "ĐỤ MỆ CHỜ XÍU ĐI",
+    LoadingSubtitle = "by NhutDZ",
+    ConfigurationSaving = {Enabled = true, FolderName = "NhutCrack", FileName = "Settings"}
+})
+
+local MainTab = Window:CreateTab("Main", 4483362458)
+local PlayersTab = Window:CreateTab("Players", 4483362458)
+local VisualTab = Window:CreateTab("Visual", 4483362458)
+local TrollTab = Window:CreateTab("Troll", 4483362458)
+local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
+
+-- ==================== SETTINGS ====================
+local Settings = {
+    ESP = {Enabled = false, Tracers = true, Distance = true, TeamCheck = false},
+    Hitbox = {Enabled = false, Size = 12, TeamCheck = false, OriginalSizes = {}},
+    Speed = {Enabled = false, Value = 16},
+    Fly = {Enabled = false, Speed = 80},
+    Jump = {Enabled = false, Value = 50},
+    Invisible = {Enabled = false}
+}
+
+local FOLDER_NAME = "NhutESP"
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- ==================== AIMBOT MOBILE CODE (MỚI) ====================
+local aimbotLoaded = false
+local aimbotGui = nil
+local aimbotToggleState = false
+
+local function LoadAimbot()
+    if aimbotLoaded then
+        Rayfield:Notify({
+            Title = "Aimbot",
+            Content = "⚠️ Aimbot đã được kích hoạt!",
+            Duration = 2,
+        })
+        return
+    end
+    
+    pcall(function()
+        -- ====================================================================
+        -- ĐẢM BẢO GAME TẢI XONG HOÀN TOÀN
+        -- ====================================================================
+        repeat task.wait() until game:IsLoaded()
+        repeat task.wait() until game.Players.LocalPlayer
+
+        -- SERVICES
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local Workspace = game:GetService("Workspace")
+        local UserInputService = game:GetService("UserInputService")
+
+        -- VARIABLES
+        local LocalPlayer = Players.LocalPlayer
+        local Camera = Workspace.CurrentCamera
+
+        -- CONFIGURATION
+        local AimbotEnabled = true
+        local FOV_RADIUS = 50 -- Kích thước vòng POV
+        local AIM_PART = "Head"
+        local AIM_STRENGTH = 1 -- Khóa mục tiêu cực mạnh, không độ trễ
+
+        -- ====================================================================
+        -- TẠO GUI CHỐNG LỆCH TÂM & NÚT BẤM DI ĐỘNG
+        -- ====================================================================
+        local ScreenGui = Instance.new("ScreenGui")
+        ScreenGui.Name = "AimbotMobileSystem_TeamFix"
+        ScreenGui.ResetOnSpawn = false
+        ScreenGui.DisplayOrder = 9999999
+        ScreenGui.IgnoreGuiInset = true -- Sửa lỗi lệch tâm do thanh TopBar của Roblox
+
+        -- 1. Vòng tròn FOV tâm màn hình (Kích thước 50)
+        local FOVFrame = Instance.new("Frame")
+        FOVFrame.Name = "FOV_Circle"
+        FOVFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+        FOVFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        FOVFrame.BackgroundTransparency = 0.95
+        FOVFrame.Size = UDim2.new(0, FOV_RADIUS * 2, 0, FOV_RADIUS * 2)
+        FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0) 
+        FOVFrame.Parent = ScreenGui
+
+        local UICornerFOV = Instance.new("UICorner")
+        UICornerFOV.CornerRadius = UDim.new(1, 0)
+        UICornerFOV.Parent = FOVFrame
+
+        local UIStrokeFOV = Instance.new("UIStroke")
+        UIStrokeFOV.Color = Color3.fromRGB(255, 0, 0)
+        UIStrokeFOV.Thickness = 1.5
+        UIStrokeFOV.Parent = FOVFrame
+
+        -- 2. Chấm nhỏ nằm ngay tâm giữa của vòng tròn (Hồng tâm)
+        local CenterDot = Instance.new("Frame")
+        CenterDot.Name = "CenterDot"
+        CenterDot.AnchorPoint = Vector2.new(0.5, 0.5)
+        CenterDot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        CenterDot.Size = UDim2.new(0, 5, 0, 5)
+        CenterDot.Position = UDim2.new(0.5, 0, 0.5, 0)
+        CenterDot.Parent = FOVFrame
+
+        local UICornerDot = Instance.new("UICorner")
+        UICornerDot.CornerRadius = UDim.new(1, 0)
+        UICornerDot.Parent = CenterDot
+
+        -- 3. Nút bấm tròn BẬT/TẮT dành cho Điện thoại (Có thể kéo thả)
+        local MobileToggleButton = Instance.new("TextButton")
+        MobileToggleButton.Name = "MobileAimToggle"
+        MobileToggleButton.Size = UDim2.new(0, 50, 0, 50)
+        MobileToggleButton.Position = UDim2.new(0, 30, 0, 150)
+        MobileToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 100) -- Màu xanh lá cây (Đang bật)
+        MobileToggleButton.BackgroundTransparency = 0.3
+        MobileToggleButton.Text = "AIM"
+        MobileToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+        MobileToggleButton.Font = Enum.Font.SourceSansBold
+        MobileToggleButton.TextSize = 14
+        MobileToggleButton.Active = true
+        MobileToggleButton.Draggable = true -- Nhấp giữ để kéo nút đi bất cứ đâu
+        MobileToggleButton.Parent = ScreenGui
+
+        local UICornerBtn = Instance.new("UICorner")
+        UICornerBtn.CornerRadius = UDim.new(1, 0)
+        UICornerBtn.Parent = MobileToggleButton
+
+        -- ĐƯA GUI VÀO PLAYER GUI
+        local PlayerGui = LocalPlayer:WaitForChild("PlayerGui", 5)
+        if PlayerGui then
+            ScreenGui.Parent = PlayerGui
+        end
+
+        aimbotGui = ScreenGui
+
+        -- ====================================================================
+        -- LOGIC SỰ KIỆN CLICK NÚT TRÊN ĐIỆN THOẠI
+        -- ====================================================================
+        MobileToggleButton.MouseButton1Click:Connect(function()
+            AimbotEnabled = not AimbotEnabled
+            FOVFrame.Visible = AimbotEnabled
+            
+            if AimbotEnabled then
+                MobileToggleButton.Text = "AIM"
+                MobileToggleButton.BackgroundColor3 = Color3.fromRGB(0, 170, 100)
+            else
+                MobileToggleButton.Text = "OFF"
+                MobileToggleButton.BackgroundColor3 = Color3.fromRGB(170, 0, 0)
+            end
+        end)
+
+        -- ====================================================================
+        -- LOGIC HỆ THỐNG KIỂM TRA (WALL CHECK & TEAM CHECK)
+        -- ====================================================================
+
+        -- Hàm kiểm tra nhìn thấy (Wall Check)
+        local function isVisible(targetPart)
+            local origin = Camera.CFrame.Position
+            local direction = targetPart.Position - origin
+            
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+            raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+            
+            local result = Workspace:Raycast(origin, direction, raycastParams)
+            
+            if not result or result.Instance:IsDescendantOf(targetPart.Parent) then
+                return true
+            end
+            return false
+        end
+
+        -- Hàm tìm mục tiêu gần tâm nhất (Có kiểm tra Team)
+        local function getClosestPlayerToCenter()
+            local closestPlayer = nil
+            local shortestDistance = FOV_RADIUS
+            local screenCenter = Camera.ViewportSize / 2 
+
+            for _, player in ipairs(Players:GetPlayers()) do
+                -- [QUAN TRỌNG] Bỏ qua bản thân VÀ bỏ qua những người cùng Team với bạn
+                if player ~= LocalPlayer and player.Team ~= LocalPlayer.Team and player.Character then
+                    local character = player.Character
+                    local head = character:FindFirstChild(AIM_PART)
+                    local humanoid = character:FindFirstChildOfClass("Humanoid")
+
+                    if head and humanoid and humanoid.Health > 0 then
+                        local vector, onScreen = Camera:WorldToViewportPoint(head.Position)
+
+                        if onScreen then
+                            local targetPos = Vector2.new(vector.X, vector.Y)
+                            local distance = (targetPos - screenCenter).Magnitude
+
+                            if distance < shortestDistance then
+                                -- Kiểm tra tường ngầm trước khi khóa
+                                if isVisible(head) then
+                                    shortestDistance = distance
+                                    closestPlayer = character
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            return closestPlayer
+        end
+
+        -- VÒNG LẶP RENDER KHÓA CHẾT TÂM CAMERA VÀO ĐẦU KẺ ĐỊCH
+        RunService.RenderStepped:Connect(function()
+            if FOVFrame then
+                FOVFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+            end
+
+            if not AimbotEnabled then return end
+
+            local targetCharacter = getClosestPlayerToCenter()
+            
+            if targetCharacter then
+                local targetHead = targetCharacter:FindFirstChild(AIM_PART)
+                local targetHumanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+                
+                if targetHead and targetHumanoid and targetHumanoid.Health > 0 then
+                    local targetCFrame = CFrame.new(Camera.CFrame.Position, targetHead.Position)
+                    Camera.CFrame = Camera.CFrame:Lerp(targetCFrame, AIM_STRENGTH)
+                end
+            end
+        end)
+
+        aimbotLoaded = true
+        aimbotToggleState = true
+        
+        Rayfield:Notify({
+            Title = "Aimbot",
+            Content = "✅ Đã kích hoạt Aimbot Mobile!",
+            Duration = 3,
+        })
+    end)
+end
+
+local function UnloadAimbot()
+    if aimbotGui then
+        pcall(function()
+            aimbotGui:Destroy()
+        end)
+        aimbotGui = nil
+    end
+    aimbotLoaded = false
+    aimbotToggleState = false
+    
+    Rayfield:Notify({
+        Title = "Aimbot",
+        Content = "❌ Đã tắt Aimbot!",
+        Duration = 2,
+    })
+end
+
+-- ==================== FLY LOGIC ====================
+local flying = false
+local bv = nil
+local bg = nil
+local flyLoop = nil
+
+local function StartFly()
+    if flying then 
+        StopFly()
+        task.wait(0.1)
+    end
+    
+    local char = LocalPlayer.Character
+    if not char then
+        task.wait(0.5)
+        char = LocalPlayer.Character
+        if not char then 
+            warn("Không tìm thấy Character!")
+            return 
+        end
+    end
+    
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    
+    if not hum or not hrp then 
+        warn("Không tìm thấy Humanoid hoặc HumanoidRootPart!")
+        return 
+    end
+    
+    print("🚀 BẬT FLY - Đang bay...")
+    
+    flying = true
+    
+    bv = Instance.new("BodyVelocity")
+    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bv.Parent = hrp
+    
+    bg = Instance.new("BodyGyro")
+    bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    bg.P = 10000
+    bg.Parent = hrp
+    
+    hrp.CanCollide = false
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") and part ~= hrp then
+            part.CanCollide = false
+        end
+    end
+    
+    flyLoop = RunService.RenderStepped:Connect(function()
+        if not Settings.Fly.Enabled then
+            StopFly()
+            return
+        end
+        
+        local char = LocalPlayer.Character
+        if not char or not char.Parent then
+            StopFly()
+            return
+        end
+        
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        
+        if not hum or not hrp or not bv or not bg then
+            StopFly()
+            return
+        end
+        
+        local cam = workspace.CurrentCamera
+        local move = hum.MoveDirection
+        
+        bg.CFrame = cam.CFrame
+        
+        if move.Magnitude > 0 then
+            local direction = Vector3.new(move.X, cam.CFrame.LookVector.Y, move.Z)
+            bv.Velocity = direction.Unit * Settings.Fly.Speed
+        else
+            bv.Velocity = Vector3.zero
+        end
+        
+        hrp.CanCollide = false
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part ~= hrp then
+                part.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function StopFly()
+    if not flying then return end
+    print("🛑 TẮT FLY")
+    
+    flying = false
+    
+    if flyLoop then
+        flyLoop:Disconnect()
+        flyLoop = nil
+    end
+    
+    local char = LocalPlayer.Character
+    if char then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        
+        if bv then
+            bv:Destroy()
+            bv = nil
+        end
+        
+        if bg then
+            bg:Destroy()
+            bg = nil
+        end
+        
+        if hrp then
+            hrp.CanCollide = true
+            hrp.Velocity = Vector3.new(0, 0, 0)
+            hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        end
+        
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(1)
+    if Settings.Fly.Enabled then
+        StartFly()
+    end
+end)
+
+LocalPlayer.CharacterRemoving:Connect(function()
+    StopFly()
+end)
+
+-- ==================== UTILITY ====================
+local function GetLocalRoot()
+    local char = LocalPlayer.Character
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function GetRoot(character)
+    return character and character:FindFirstChild("HumanoidRootPart")
+end
+
+local function IsTeammate(plr)
+    if not Settings.ESP.TeamCheck and not Settings.Hitbox.TeamCheck then return false end
+    if not plr or not LocalPlayer then return false end
+    return LocalPlayer.Team == plr.Team and LocalPlayer.Team ~= nil
+end
+
+-- ==================== SPEED & JUMP LOGIC ====================
+task.spawn(function()
+    while task.wait(0.1) do
+        pcall(function()
+            local char = LocalPlayer.Character
+            local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+            if humanoid and not Settings.Fly.Enabled then
+                if Settings.Speed.Enabled then
+                    humanoid.WalkSpeed = Settings.Speed.Value
+                elseif humanoid.WalkSpeed ~= 16 then
+                    humanoid.WalkSpeed = 16
+                end
+                
+                if Settings.Jump.Enabled then
+                    humanoid.JumpPower = Settings.Jump.Value
+                elseif humanoid.JumpPower ~= 50 then
+                    humanoid.JumpPower = 50
+                end
+            end
+        end)
+    end
+end)
+
+-- ==================== CLEANUP ====================
+local function CleanupPlayer(plr)
+    if plr.Character and plr.Character:FindFirstChild(FOLDER_NAME) then
+        plr.Character[FOLDER_NAME]:Destroy()
+    end
+    Settings.Hitbox.OriginalSizes[plr] = nil
+end
+
+-- ==================== HITBOX ====================
+local function ApplyHitbox(character, plr)
+    if not character or not plr or plr == LocalPlayer then return end
+    local root = GetRoot(character)
+    if not root then return end
+    
+    if not Settings.Hitbox.OriginalSizes[plr] then
+        Settings.Hitbox.OriginalSizes[plr] = root.Size
+    end
+    
+    if Settings.Hitbox.Enabled and not (Settings.Hitbox.TeamCheck and IsTeammate(plr)) then
+        root.Size = Vector3.new(Settings.Hitbox.Size, Settings.Hitbox.Size, Settings.Hitbox.Size)
+        root.Transparency = 0.6
+        root.CanCollide = false
+        root.Color = Color3.fromRGB(255, 0, 0)
+    else
+        if Settings.Hitbox.OriginalSizes[plr] then
+            root.Size = Settings.Hitbox.OriginalSizes[plr]
+        end
+        root.Transparency = 1
+        root.CanCollide = true
+        root.Color = Color3.fromRGB(27, 42, 53)
+    end
+end
+
+local function UpdateAllHitboxes()
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr.Character then ApplyHitbox(plr.Character, plr) end
+    end
+end
+
+-- ==================== ESP ====================
+local function CreateESP(plr)
+    if plr == LocalPlayer then return end
+    
+    local function Apply(character)
+        if not character or not Settings.ESP.Enabled then return end
+        if Settings.ESP.TeamCheck and IsTeammate(plr) then return end
+        
+        local root = GetRoot(character)
+        if not root then return end
+        
+        if character:FindFirstChild(FOLDER_NAME) then character[FOLDER_NAME]:Destroy() end
+        local folder = Instance.new("Folder", character)
+        folder.Name = FOLDER_NAME
+        
+        local highlight = Instance.new("Highlight", folder)
+        highlight.Adornee = character
+        highlight.FillColor = Color3.fromRGB(255, 0, 0)
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.FillTransparency = 0.5
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        
+        if Settings.ESP.Tracers then
+            local line = Instance.new("LineHandleAdornment", folder)
+            line.Name = "TracerLine"
+            line.Thickness = 3
+            line.Color3 = Color3.fromRGB(255, 0, 0)
+            line.AlwaysOnTop = true
+            line.Adornee = workspace
+        end
+        
+        if Settings.ESP.Distance then
+            local billboard = Instance.new("BillboardGui", folder)
+            billboard.Adornee = root
+            billboard.Size = UDim2.new(0, 120, 0, 30)
+            billboard.StudsOffset = Vector3.new(0, 3, 0)
+            billboard.AlwaysOnTop = true
+            
+            local label = Instance.new("TextLabel", billboard)
+            label.Size = UDim2.new(1, 0, 1, 0)
+            label.BackgroundTransparency = 1
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextStrokeTransparency = 0
+            label.TextSize = 14
+            label.Font = Enum.Font.GothamBold
+            label.Text = "[0]"
+            label.Name = "DistanceLabel"
+        end
+    end
+    
+    if plr.Character then Apply(plr.Character) end
+    plr.CharacterAdded:Connect(function(char)
+        task.wait(0.5)
+        Apply(char)
+        UpdateAllHitboxes()
+    end)
+end
+
+RunService.RenderStepped:Connect(function()
+    local myRoot = GetLocalRoot()
+    if not myRoot then return end
+    
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr ~= LocalPlayer and plr.Character then
+            local folder = plr.Character:FindFirstChild(FOLDER_NAME)
+            local root = GetRoot(plr.Character)
+            
+            if folder and root then
+                if Settings.ESP.Enabled and Settings.ESP.Distance then
+                    local label = folder:FindFirstChild("DistanceLabel", true)
+                    if label then
+                        label.Text = string.format("[%d]", math.floor((root.Position - myRoot.Position).Magnitude))
+                    end
+                end
+                
+                local line = folder:FindFirstChild("TracerLine")
+                if line and line:IsA("LineHandleAdornment") then
+                    if Settings.ESP.Enabled and Settings.ESP.Tracers then
+                        local startPos = myRoot.Position - Vector3.new(0, 2, 0)
+                        line.CFrame = CFrame.new(startPos, root.Position)
+                        line.Length = (root.Position - startPos).Magnitude
+                    else
+                        line.Length = 0
+                    end
+                end
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.3) do
+        if Settings.Hitbox.Enabled then UpdateAllHitboxes() end
+    end
+end)
+
+Players.PlayerAdded:Connect(function(plr)
+    CreateESP(plr)
+    plr.CharacterAdded:Connect(function() task.wait(0.5) UpdateAllHitboxes() end)
+end)
+Players.PlayerRemoving:Connect(CleanupPlayer)
+
+-- ==================== UI ====================
+-- TAB MAIN
+MainTab:CreateToggle({
+    Name = "Fly", 
+    CurrentValue = false, 
+    Callback = function(v)
+        Settings.Fly.Enabled = v
+        if v then
+            StartFly()
+        else
+            StopFly()
+        end
+    end
+})
+
+MainTab:CreateSlider({
+    Name = "Fly Speed", 
+    Range = {10, 250}, 
+    Increment = 5, 
+    CurrentValue = 80, 
+    Callback = function(v)
+        Settings.Fly.Speed = v
+    end
+})
+
+-- TAB PLAYERS
+PlayersTab:CreateToggle({
+    Name = "Speed Hack", 
+    CurrentValue = false, 
+    Callback = function(v)
+        Settings.Speed.Enabled = v
+        local char = LocalPlayer.Character
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        if humanoid and not Settings.Fly.Enabled then
+            humanoid.WalkSpeed = v and Settings.Speed.Value or 16
+        end
+    end
+})
+
+PlayersTab:CreateSlider({
+    Name = "Speed Value", 
+    Range = {16, 250}, 
+    Increment = 1, 
+    CurrentValue = 16, 
+    Callback = function(v)
+        Settings.Speed.Value = v
+        local char = LocalPlayer.Character
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        if humanoid and Settings.Speed.Enabled and not Settings.Fly.Enabled then
+            humanoid.WalkSpeed = v
+        end
+    end
+})
+
+PlayersTab:CreateToggle({
+    Name = "Jump Hack", 
+    CurrentValue = false, 
+    Callback = function(v)
+        Settings.Jump.Enabled = v
+        local char = LocalPlayer.Character
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        if humanoid and not Settings.Fly.Enabled then
+            humanoid.JumpPower = v and Settings.Jump.Value or 50
+        end
+    end
+})
+
+PlayersTab:CreateSlider({
+    Name = "Jump Power", 
+    Range = {50, 500}, 
+    Increment = 5, 
+    CurrentValue = 50, 
+    Callback = function(v)
+        Settings.Jump.Value = v
+        local char = LocalPlayer.Character
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        if humanoid and Settings.Jump.Enabled and not Settings.Fly.Enabled then
+            humanoid.JumpPower = v
+        end
+    end
+})
+
+-- TAB VISUAL
+VisualTab:CreateToggle({
+    Name = "ESP", 
+    CurrentValue = false, 
+    Callback = function(v)
+        Settings.ESP.Enabled = v
+        for _, plr in ipairs(Players:GetPlayers()) do
+            if not v and plr.Character and plr.Character:FindFirstChild(FOLDER_NAME) then 
+                plr.Character[FOLDER_NAME]:Destroy() 
+            else 
+                CreateESP(plr) 
+            end
+        end
+    end
+})
+
+VisualTab:CreateToggle({
+    Name = "Team Check (ESP)", 
+    CurrentValue = false, 
+    Callback = function(v) 
+        Settings.ESP.TeamCheck = v 
+    end
+})
+
+VisualTab:CreateToggle({
+    Name = "Distance ESP", 
+    CurrentValue = true, 
+    Callback = function(v) 
+        Settings.ESP.Distance = v 
+    end
+})
+
+VisualTab:CreateToggle({
+    Name = "Tracers", 
+    CurrentValue = true, 
+    Callback = function(v) 
+        Settings.ESP.Tracers = v 
+    end
+})
+
+VisualTab:CreateToggle({
+    Name = "Hitbox Expander", 
+    CurrentValue = false, 
+    Callback = function(v) 
+        Settings.Hitbox.Enabled = v 
+        UpdateAllHitboxes() 
+    end
+})
+
+VisualTab:CreateSlider({
+    Name = "Hitbox Size", 
+    Range = {5, 100}, 
+    Increment = 1, 
+    CurrentValue = 12, 
+    Callback = function(v) 
+        Settings.Hitbox.Size = v 
+        if Settings.Hitbox.Enabled then 
+            UpdateAllHitboxes() 
+        end 
+    end
+})
+
+VisualTab:CreateToggle({
+    Name = "Hitbox Team Check", 
+    CurrentValue = false, 
+    Callback = function(v) 
+        Settings.Hitbox.TeamCheck = v 
+        UpdateAllHitboxes() 
+    end
+})
+
+-- ==================== AIMBOT TAB ====================
+local aimbotActive = false
+
+AimbotTab:CreateParagraph({
+    Title = "🎯 Aimbot Mobile",
+    Content = "Bật/tắt aimbot cho điện thoại"
+})
+
+AimbotTab:CreateButton({
+    Name = "🎯 Bật/Tắt Aimbot", 
+    Callback = function()
+        if not aimbotActive then
+            aimbotActive = true
+            LoadAimbot()
+        else
+            aimbotActive = false
+            UnloadAimbot()
+        end
+    end
+})
+
+AimbotTab:CreateParagraph({
+    Title = "📖 Hướng Dẫn",
+    Content = "1. Bấm 'Bật/Tắt Aimbot'\n2. Nút AIM sẽ xuất hiện trên màn hình\n3. Bấm nút AIM để bật/tắt aim\n4. Kéo nút AIM để di chuyển"
+})
+
+-- ==================== TROLL TAB ====================
+local invisibleActive = false
+
+TrollTab:CreateParagraph({
+    Title = "👻 Tàng Hình",
+    Content = "Bật/tắt chế độ tàng hình"
+})
+
+TrollTab:CreateButton({
+    Name = "👻 Bật Tàng Hình", 
+    Callback = function()
+        if not invisibleActive then
+            pcall(function()
+                loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Awesome-Invisible-man-21074"))()
+                invisibleActive = true
+                print("👻 Đã kích hoạt Tàng Hình!")
+                
+                Rayfield:Notify({
+                    Title = "Troll Mode",
+                    Content = "✅ Đã bật tàng hình thành công!",
+                    Duration = 2,
+                })
+            end)
+        else
+            pcall(function()
+                local char = LocalPlayer.Character
+                if char then
+                    for _, part in ipairs(char:GetDescendants()) do
+                        if part:IsA("BasePart") then
+                            part.Transparency = 0
+                            part.LocalTransparencyModifier = 0
+                        end
+                    end
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.HealthDisplayDistance = 100
+                        hum.NameDisplayDistance = 100
+                    end
+                end
+                invisibleActive = false
+                print("👀 Đã tắt Tàng Hình!")
+                
+                Rayfield:Notify({
+                    Title = "Troll Mode",
+                    Content = "❌ Đã tắt tàng hình!",
+                    Duration = 2,
+                })
+            end)
+        end
+    end
+})
+
+TrollTab:CreateButton({
+    Name = "🔄 Reset Tàng Hình (Nếu bị lỗi)", 
+    Callback = function()
+        pcall(function()
+            local char = LocalPlayer.Character
+            if char then
+                for _, part in ipairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.Transparency = 0
+                        part.LocalTransparencyModifier = 0
+                    end
+                end
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then
+                    hum.HealthDisplayDistance = 100
+                    hum.NameDisplayDistance = 100
+                end
+            end
+            invisibleActive = false
+            print("🔄 Đã reset tàng hình!")
+            
+            Rayfield:Notify({
+                Title = "Troll Mode",
+                Content = "🔄 Đã reset!",
+                Duration = 2,
+            })
+        end)
+    end
+})
+
+print("=== LOADED SUCCESSFULLY ===")
+print("Bật Fly trong tab Main để bay!")
+print("WASD: Di chuyển | Space: Lên | Shift: Xuống")
+print("🎯 Tab Aimbot: Bật/tắt aimbot mobile!")
+print("👻 Tab Troll: Bật/tắt tàng hình!")
