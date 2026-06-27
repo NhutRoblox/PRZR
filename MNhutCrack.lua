@@ -4,7 +4,7 @@ local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 -- ==================== WINDOW ====================
 local Window = Rayfield:CreateWindow({
     Name = "NhutCrack",
-    LoadingTitle = "ĐỤ MỆ CHỜ XÍU ĐI",
+    LoadingTitle = "NHÌN CON CẶC",
     LoadingSubtitle = "by NhutDZ",
     ConfigurationSaving = {Enabled = true, FolderName = "NhutCrack", FileName = "Settings"}
 })
