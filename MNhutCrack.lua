@@ -30,11 +30,144 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 -- ==================== INVISIBLE VARIABLES ====================
+-- Mod Made By Bảo Béo
+-- Source Gốc CKG_Studio (Strict Real-Time Character Pointer Fix)
+
+local INVIS_POS = CFrame.new(4000, 4000, 4000)
 local IsInvisible = false
-local StatusButton = nil
-local invisibleGui = nil
+
+local MainFrame = nil
+local StatusLabel = nil
 local invisConnections = {}
-local invisRunning = false
+
+local function ApplyTransparency(char, value)
+    if not char then return end
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA('BasePart') and part.Name ~= "HumanoidRootPart" then
+            part.Transparency = value
+        end
+    end
+end
+
+local function ToggleInvisible()
+    IsInvisible = not IsInvisible
+    local char = LocalPlayer.Character
+    if IsInvisible then
+        ApplyTransparency(char, 0.5)
+        LocalPlayer.ReplicationFocus = Camera
+    else
+        ApplyTransparency(char, 0)
+        LocalPlayer.ReplicationFocus = nil
+    end
+    if StatusLabel then
+        StatusLabel.Text = IsInvisible and "● ON" or "● OFF"
+        StatusLabel.TextColor3 = IsInvisible and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 80, 80)
+    end
+end
+
+local function CreateInvisibleGUI()
+    if LocalPlayer.PlayerGui:FindFirstChild("InvisibleGUI") then
+        LocalPlayer.PlayerGui.InvisibleGUI:Destroy()
+        MainFrame = nil
+        StatusLabel = nil
+        return
+    end
+
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    if not playerGui then return end
+
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "InvisibleGUI"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.IgnoreGuiInset = true
+    ScreenGui.Parent = playerGui
+
+    MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 170, 0, 85)
+    MainFrame.Position = UDim2.new(0.5, -85, 0.15, 0)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    MainFrame.BackgroundTransparency = 0
+    MainFrame.Parent = ScreenGui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 12)
+    corner.Parent = MainFrame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = 1.5
+    stroke.Color = Color3.fromRGB(255, 255, 255)
+    stroke.Transparency = 0.4
+    stroke.Parent = MainFrame
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, 0, 0.55, 0)
+    titleLabel.Position = UDim2.new(0, 0, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "INVISIBLE"
+    titleLabel.TextScaled = false
+    titleLabel.TextSize = 19
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.Parent = MainFrame
+
+    StatusLabel = Instance.new("TextLabel")
+    StatusLabel.Size = UDim2.new(1, 0, 0.45, 0)
+    StatusLabel.Position = UDim2.new(0, 0, 0.55, 0)
+    StatusLabel.BackgroundTransparency = 1
+    StatusLabel.Text = IsInvisible and "● ON" or "● OFF"
+    StatusLabel.TextScaled = false
+    StatusLabel.TextSize = 17
+    StatusLabel.Font = Enum.Font.GothamMedium
+    StatusLabel.TextColor3 = IsInvisible and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 80, 80)
+    StatusLabel.Parent = MainFrame
+
+    -- ===== KÉO THẢ CHO CẢ TOUCH VÀ CHUỘT =====
+    local dragging = false
+    local dragStartPos = nil
+    local frameStartPos = nil
+    local isClick = false
+
+    MainFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            isClick = true
+            dragStartPos = input.Position
+            frameStartPos = MainFrame.Position
+        end
+    end)
+
+    MainFrame.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or 
+           input.UserInputType == Enum.UserInputType.Touch then
+            if dragging then
+                isClick = false
+                local delta = input.Position - dragStartPos
+                MainFrame.Position = UDim2.new(
+                    frameStartPos.X.Scale, frameStartPos.X.Offset + delta.X,
+                    frameStartPos.Y.Scale, frameStartPos.Y.Offset + delta.Y
+                )
+            end
+        end
+    end)
+
+    MainFrame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+           input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+            if isClick then
+                ToggleInvisible()
+            end
+            isClick = false
+        end
+    end)
+
+    Rayfield:Notify({
+        Title = "Troll Mode",
+        Content = "✅ Đã hiển thị nút tàng hình! (Nhấn G để tắt/bật)",
+        Duration = 2,
+    })
+end
 
 -- ==================== AIMBOT MOBILE CODE ====================
 local aimbotLoaded = false
@@ -502,117 +635,8 @@ Players.PlayerAdded:Connect(function(plr)
 end)
 Players.PlayerRemoving:Connect(CleanupPlayer)
 
--- ==================== INVISIBLE FUNCTIONS ====================
-local function ApplyTransparency(char, transparencyValue)
-    if not char then return end
-    for _, part in pairs(char:GetDescendants()) do
-        if part:IsA('BasePart') and part.Name ~= "HumanoidRootPart" then
-            part.Transparency = transparencyValue
-        end
-    end
-end
-
-local function ToggleInvisible()
-    IsInvisible = not IsInvisible
-    
-    local char = LocalPlayer.Character
-    if IsInvisible then
-        ApplyTransparency(char, 0.5)
-        LocalPlayer.ReplicationFocus = Camera
-    else
-        ApplyTransparency(char, 0)
-        LocalPlayer.ReplicationFocus = nil
-    end
-    
-    if StatusButton then
-        if IsInvisible then
-            StatusButton.Text = "Invisible: ON"
-            StatusButton.BackgroundColor3 = Color3.fromRGB(85, 255, 127)
-            StatusButton.TextColor3 = Color3.fromRGB(0, 0, 0)
-        else
-            StatusButton.Text = "Invisible: OFF"
-            StatusButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
-            StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-        end
-    end
-end
-
-local function CreateInvisibleGUI()
-    if LocalPlayer.PlayerGui:FindFirstChild("InvisibleGUI") then
-        LocalPlayer.PlayerGui.InvisibleGUI:Destroy()
-        invisibleGui = nil
-        StatusButton = nil
-        return
-    end
-    
-    local ScreenGui = Instance.new('ScreenGui')
-    ScreenGui.Name = "InvisibleGUI"
-    ScreenGui.ResetOnSpawn = false
-    
-    StatusButton = Instance.new('TextButton')
-    local UICorner = Instance.new("UICorner")
-    local UIStroke = Instance.new("UIStroke")
-    
-    StatusButton.Name = "ToggleButton"
-    StatusButton.Size = UDim2.new(0, 140, 0, 50)
-    StatusButton.Position = UDim2.new(0.5, -70, 0.15, 0)
-    StatusButton.Text = IsInvisible and 'Invisible: ON' or 'Invisible: OFF'
-    StatusButton.Font = Enum.Font.GothamBold
-    StatusButton.TextSize = 16
-    StatusButton.TextColor3 = IsInvisible and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(255, 255, 255)
-    StatusButton.BackgroundColor3 = IsInvisible and Color3.fromRGB(85, 255, 127) or Color3.fromRGB(255, 85, 85)
-    StatusButton.Parent = ScreenGui
-    
-    UICorner.CornerRadius = UDim.new(0, 10)
-    UICorner.Parent = StatusButton
-    
-    UIStroke.Thickness = 2
-    UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-    UIStroke.Color = Color3.fromRGB(255, 255, 255)
-    UIStroke.Transparency = 0.5
-    UIStroke.Parent = StatusButton
-    
-    ScreenGui.Parent = LocalPlayer:WaitForChild('PlayerGui')
-    invisibleGui = ScreenGui
-    
-    local dragging = false
-    local dragInput, dragStart, startPos
-    
-    StatusButton.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = StatusButton.Position
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    
-    StatusButton.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    
-    game:GetService("UserInputService").InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            StatusButton.Position = UDim2.new(
-                startPos.X.Scale, startPos.X.Offset + delta.X,
-                startPos.Y.Scale, startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-    
-    StatusButton.MouseButton1Click:Connect(ToggleInvisible)
-end
-
 -- ==================== YIELD SCRIPT ====================
 local YieldEnabled = false
-local YieldConnection = nil
 
 local function LoadYield()
     if YieldEnabled then
@@ -758,7 +782,6 @@ VisualTab:CreateToggle({
     Callback = function(v)
         Settings.ESP.Enabled = v
         if not v then
-            -- Xóa tất cả ESP
             for _, plr in ipairs(Players:GetPlayers()) do
                 if plr.Character then
                     local folder = plr.Character:FindFirstChild(FOLDER_NAME)
@@ -766,7 +789,6 @@ VisualTab:CreateToggle({
                 end
             end
         else
-            -- Refresh ESP
             for _, plr in ipairs(Players:GetPlayers()) do
                 CreateESP(plr)
             end
@@ -779,7 +801,6 @@ VisualTab:CreateToggle({
     CurrentValue = false, 
     Callback = function(v) 
         Settings.ESP.TeamCheck = v
-        -- Refresh ESP
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr.Character and plr.Character:FindFirstChild(FOLDER_NAME) then 
                 plr.Character[FOLDER_NAME]:Destroy() 
@@ -835,13 +856,7 @@ TrollTab:CreateButton({
     Name = "👻 Hiển thị nút Tàng Hình", 
     Callback = function()
         CreateInvisibleGUI()
-        if invisibleGui then
-            Rayfield:Notify({
-                Title = "Troll Mode",
-                Content = "✅ Đã hiển thị nút tàng hình! (Nhấn G để tắt/bật)",
-                Duration = 2,
-            })
-        else
+        if not MainFrame then
             Rayfield:Notify({
                 Title = "Troll Mode",
                 Content = "❌ Đã ẩn nút tàng hình!",
@@ -874,17 +889,9 @@ TrollTab:CreateButton({
             
             if LocalPlayer.PlayerGui:FindFirstChild("InvisibleGUI") then
                 LocalPlayer.PlayerGui.InvisibleGUI:Destroy()
-                invisibleGui = nil
-                StatusButton = nil
+                MainFrame = nil
+                StatusLabel = nil
             end
-            
-            if invisConnections then
-                for _, conn in pairs(invisConnections) do
-                    pcall(function() conn:Disconnect() end)
-                end
-                invisConnections = {}
-            end
-            invisRunning = false
             
             Rayfield:Notify({
                 Title = "Troll Mode",
@@ -920,48 +927,47 @@ TrollTab:CreateParagraph({
     Content = "1. Bấm 'Bật Yield' để kích hoạt\n2. Mở chat game gõ ';' + lệnh\n3. Ví dụ: ;fly, ;tp, ;kill all\n4. Gõ ';cmds' để xem tất cả lệnh"
 })
 
--- ==================== INVISIBLE HEARTBEAT LOOP ====================
-local INVIS_POS = CFrame.new(99999, 99999, 99999)
+-- ==================== INVISIBLE CONNECTIONS ====================
+local UserInputService = game:GetService("UserInputService")
 
-invisConnections[1] = LocalPlayer:GetMouse().KeyDown:Connect(function(key)
-    if key == 'g' then
+invisConnections[1] = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.G then
         ToggleInvisible()
     end
 end)
 
 invisConnections[2] = RunService.Heartbeat:Connect(function()
-    if IsInvisible then
-        local char = LocalPlayer.Character
-        local rootPart = char and char:FindFirstChild("HumanoidRootPart")
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-        
-        if rootPart and humanoid and humanoid.Health > 0 then
-            local currentCFrame = rootPart.CFrame
-            local originalCamOffset = humanoid.CameraOffset
-            
-            local offsetPosition = INVIS_POS:ToObjectSpace(currentCFrame).Position
-            
-            rootPart.CFrame = INVIS_POS
-            humanoid.CameraOffset = offsetPosition
-            
-            RunService.RenderStepped:Wait()
-            
-            if rootPart and rootPart.Parent then
-                rootPart.CFrame = currentCFrame
-                humanoid.CameraOffset = originalCamOffset
-            end
-        end
+    if not IsInvisible then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local rootPart = char:FindFirstChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if not rootPart or not humanoid or humanoid.Health <= 0 then return end
+
+    local currentCFrame = rootPart.CFrame
+    local originalCamOffset = humanoid.CameraOffset
+    local offsetPosition = INVIS_POS:ToObjectSpace(currentCFrame).Position
+
+    rootPart.CFrame = INVIS_POS
+    humanoid.CameraOffset = offsetPosition
+
+    RunService.RenderStepped:Wait()
+
+    if rootPart and rootPart.Parent then
+        rootPart.CFrame = currentCFrame
+        humanoid.CameraOffset = originalCamOffset
     end
 end)
 
 invisConnections[3] = LocalPlayer.CharacterAdded:Connect(function(newChar)
     IsInvisible = false
     LocalPlayer.ReplicationFocus = nil
-    if StatusButton then
-        StatusButton.Text = "Invisible: OFF"
-        StatusButton.BackgroundColor3 = Color3.fromRGB(255, 85, 85)
-        StatusButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    if StatusLabel then
+        StatusLabel.Text = "● OFF"
+        StatusLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
     end
+    ApplyTransparency(newChar, 0)
 end)
 
 print("=== LOADED SUCCESSFULLY ===")
